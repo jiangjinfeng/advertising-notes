@@ -451,4 +451,4 @@ TikTok 需求 + 全广告形式 + 新兴市场。官方支持激励、插屏、�
 - 未披露的数字标注“未披露”，不做估算；厂商规模数据为官方口径，未经审计。
 - 市场数据来自不同机构，定义不同，不能相加；投放侧排名、SDK 覆盖率、收入份额是三种不同指标，不能混用。
 - 数据截至 2026 年 10 月；接入前请以各平台最新官方文档和政策为准。
-- 本文件由 `sync.sh` 自动同步至 GitHub 仓库 `jiangjinfeng/rta-advertising-notes`。
+- 本文件由 `sync.sh` 自动同步至 GitHub 仓库 `jiangjinfeng/advertising-notes`。
