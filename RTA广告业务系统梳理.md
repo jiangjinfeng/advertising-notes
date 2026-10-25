@@ -1,4 +1,4 @@
-# RTA 广告业务系统梳理（v0.4.5）
+# RTA 广告业务系统梳理（v0.4.6）
 
 > 定位：高层汇报 + 个人知识体系
 > 视角：媒体侧 × 广告主侧，讲双方的价值与使用方法
@@ -152,6 +152,61 @@ RTA 字段设计不是“把能传的都传过去”，而是在**信息量、�
 5. **防套利**：不要下发排名、竞品出价、平台预估等会被反向利用的字段；系数/出价要有边界。
 
 **最常见的坑**：ID 哈希/大小写/编码/盐不一致导致匹配率低；价格单位分/元混用；0 和 null 语义混淆；创意列表过长拖垮时延；字段版本漂移导致线上解析失败。
+
+
+### 1.7 常见字段清单（按用途）
+
+> 下面是行业常见字段的“功能清单”，不是某个平台的完整 schema；字段名、单位、枚举以平台最新文档为准。
+
+#### 请求字段
+
+| 类别 | 常见字段/叫法 | 主要用途 | 备注 |
+|---|---|---|---|
+| 身份 | did / device_id / oaid / ifa / did_md5 | 匹配广告主一方数据 | 必须带 did_type；哈希/编码/盐要统一 |
+| 请求标识 | req_id / request_id | 幂等、追踪、对账 | 全局唯一；日志必须带 |
+| 广告位 | slot_id / tag_id / ad_slot | 区分场景、尺寸、策略 | 不同广告位策略/时延不同 |
+| 流量来源 | source / media | 站内 vs 联盟；不同规则 | 巨量 source=local/union |
+| 设备/环境 | os, model, network, geo, carrier | 模型特征、粗定向 | 粒度越细，隐私/负载越高 |
+| 时间 | timestamp / ts | 防重放、时段特征 | 服务器时间；容忍时钟漂移 |
+| 策略标识 | rta_id / strategy_id | 一个广告主多套策略 | 绑定计划/单元 |
+| 计划/广告 | campaign_id / ad_id / creative_id | 知道在评估哪个广告 | 二次请求会带候选创意 |
+| 出价上下文 | bid_type / conversion_goal / floor_price | 解释出价语义、约束 | oCPX/CPC/CPM 不同 |
+| 频控状态 | frequency / cap / last_expose | 跨媒体频控、去重 | 平台可能只给部分 |
+| 安全 | sign / nonce / timestamp | 防伪造、防重放 | 密钥轮换；IP 白名单 |
+| 平台特征（可选） | pctr / pcvr / user_tags | 帮广告主模型 | 隐私/策略泄露风险，谨慎 |
+
+#### 返回字段
+
+| 类别 | 常见字段/叫法 | 主要用途 | 备注 |
+|---|---|---|---|
+| 参竞 | is_bid / bid / participate | 投/不投 | 0/1 语义、缺省/超时兜底要写死 |
+| 出价系数 | bid_coef / priceWeight / boost_coef | 相对调价 | 范围通常 0–5；和 oCPX 的优先级 |
+| 直接出价 | price / bid_price / RTA_BID | 绝对出价 | 单位分/元；计费方式；覆盖规则 |
+| 质量分 | quality / user_score | 用户质量/ pacing | 不等于出价；平台可能用于扰动 |
+| 创意 | creative_id / creative_list | 指定创意 | 必须已审核；列表长度/排序 |
+| 商品 | product_id / item_id / product_list | DPA/选品 | 商品库可用性；去重 |
+| 缓存 | ttl / cache_time | 决策有效期 | 上下界；负缓存要小心 |
+| 原因码 | reason_code / code | 排查/统计 | 不要暴露平台策略 |
+| 追踪 | trace_id / req_id | 日志/对账 | 和请求 ID 对应 |
+| 签名 | sign | 响应完整性 | 防篡改 |
+
+#### 最小可用集 vs 进阶字段
+
+- **最小可用**：身份（did + did_type）、request_id、slot_id、timestamp、sign；返回 is_bid、bid_coef 或 price、ttl。
+- **进阶**：加 creative/product list、质量分、频控状态、出价类型/转化目标。
+- **二次请求**：加候选创意/商品列表、创意级出价；不带排名，防止广告主看排名压价。
+
+#### 平台叫法差异（示例）
+
+| 平台 | 特色字段/叫法 |
+|---|---|
+| 巨量 | `did` / `did_type` / `source`；`user_scores` 里用 `user_type` 区分质量分、出价系数、穿山甲直接出价 |
+| 华为 | `price`（修改出价）、`priceWeight`（出价系数）、`ocpcPriceInfoList`（oCPC 调价） |
+| 支付宝 | `RTA_BID`（直接出价）、`BOOST_COEF`（溢价系数）、`bid_info.value`（单位分） |
+| 快手 | 返回 `ALL` / `NONE` / `PART`；`cache time` 可调 30–120 分钟 |
+| 腾讯 | `is_bid`、`bid_coef`、`creative_id`；缓存 1 小时降低 QPS |
+
+> 这些只是公开资料里的常见叫法，具体字段名、枚举和单位以各平台最新接口文档为准。
 
 ---
 
@@ -909,4 +964,4 @@ RTA 不是投放一个部门的事，至少需要“投放 + 数据 + 工程”�
 
 ---
 
-*版本：v0.4.5，2026-10-20。新增 1.6“字段设计的讲究（概念级）”：请求/返回字段的四层结构、五条原则和常见坑。*
+*版本：v0.4.6，2026-10-20。新增 1.7“常见字段清单”：请求/返回字段、最小可用集、平台叫法差异。*
